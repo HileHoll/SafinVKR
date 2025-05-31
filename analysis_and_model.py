@@ -6,7 +6,7 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.svm import SVC
 from xgboost import XGBClassifier
-from sklearn.metrics import accuracy_score, confusion_matrix, classification_report, roc_auc_score, roc_curve
+from sklearn.metrics import accuracy_score, confusion_matrix, classification_report
 import matplotlib.pyplot as plt
 import seaborn as sns
 
@@ -18,13 +18,26 @@ def analysis_and_model_page():
     if uploaded_file:
         df = pd.read_csv(uploaded_file)
         st.write("Датасет загружен:", df.head())
+        st.write("Колонки в датасете:", list(df.columns))
+
+        # Проверка наличия столбца 'Target' или аналогичного
+        target_column = None
+        possible_target_columns = ['Target', 'target', 'Machine failure', 'Failure']
+        for col in possible_target_columns:
+            if col in df.columns:
+                target_column = col
+                break
+        
+        if target_column is None:
+            st.error("Столбец с целевой переменной ('Target' или аналогичный) не найден. Пожалуйста, проверьте датасет.")
+            return
 
         # Предобработка
-        df = df.drop(['UDI', 'Product ID', 'TWF', 'HDF', 'PWF', 'OSF', 'RNF'], axis=1)
+        df = df.drop(['UDI', 'Product ID', 'TWF', 'HDF', 'PWF', 'OSF', 'RNF'], axis=1, errors='ignore')
         le = LabelEncoder()
         df['Type'] = le.fit_transform(df['Type'])
-        X = df.drop('Target', axis=1)
-        y = df['Target']
+        X = df.drop(target_column, axis=1)
+        y = df[target_column]
         scaler = StandardScaler()
         X_scaled = scaler.fit_transform(X)
 
@@ -45,8 +58,7 @@ def analysis_and_model_page():
             results[name] = {
                 "accuracy": accuracy_score(y_test, y_pred),
                 "confusion_matrix": confusion_matrix(y_test, y_pred),
-                "classification_report": classification_report(y_test, y_pred),
-                "roc_auc": roc_auc_score(y_test, model.predict_proba(X_test)[:, 1])
+                "classification_report": classification_report(y_test, y_pred)
             }
 
         # Визуализация
@@ -62,8 +74,11 @@ def analysis_and_model_page():
 
         # Предсказание для новых данных
         st.subheader("Предсказание для новых данных")
-        input_data = st.text_input("Введите данные (через запятую):")
+        input_data = st.text_input("Введите данные (через запятую, например: 0,298.1,308.6,1595,39.5,0):")
         if input_data:
-            input_array = scaler.transform([list(map(float, input_data.split(',')))])
-            prediction = models["Random Forest"].predict(input_array)
-            st.write(f"Предсказание: {'Отказ' if prediction[0] == 1 else 'Без отказа'}")
+            try:
+                input_array = scaler.transform([list(map(float, input_data.split(',')))])
+                prediction = models["Random Forest"].predict(input_array)
+                st.write(f"Предсказание: {'Отказ' if prediction[0] == 1 else 'Без отказа'}")
+            except Exception as e:
+                st.error(f"Ошибка ввода: {e}")
